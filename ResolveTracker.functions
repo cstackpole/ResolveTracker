@@ -66,7 +66,7 @@ function usage (){
 function TestNumber() {
 	# swiped code from jilles at
 	# http://stackoverflow.com/questions/806906/how-do-i-test-if-a-variable-is-a-number-in-bash
-        case $1 in
+        case ${1} in
                 ''|*[!0-9]*) echo 1 ;;
                 *) echo 0 ;;
         esac    
@@ -121,15 +121,15 @@ function AddEvent() {
 	# Get the date of the event
 	dloop=0
 	storedate=''
-	while [ $dloop -ne 1 ]
+	while [ ${dloop} -ne 1 ]
 	do
 		echo "Do you want to use todays date? [y/n]"
 		read usersdate
-		if [ "$usersdate" == "y" -o "$usersdate" == "Y" ]
+		if [ "${usersdate}" == "y" -o "${usersdate}" == "Y" ]
 		then
 			storedate=`date '+%F'`
 			dloop=1
-		elif [ "$usersdate" == "n" -o "$usersdate" == "N" ]
+		elif [ "${usersdate}" == "n" -o "${usersdate}" == "N" ]
 		then
 			CheckUserYear
 			dloop=1
@@ -165,7 +165,7 @@ function AddEvent() {
 			userstime=`printf %02d:%02d ${chkhour} ${chkminute}`
 		fi
 	done
-	storedate=`echo $storedate $userstime`
+	storedate=`echo ${storedate} ${userstime}`
 
 	# Get length of time
 	timelenloop=0
@@ -173,7 +173,7 @@ function AddEvent() {
 	do
 		echo "How long did you spend at the event."
 		read userstimelength
-		if [ "`TestNumber $userstimelength`" == "1" ]
+		if [ "`TestNumber ${userstimelength}`" == "1" ]
 		then 
 			NonNumError ${userstimelength}
 		else
@@ -197,13 +197,13 @@ function AddEvent() {
 			isneg=1
 			usersscore=${usersscore:1}			
 		fi
-		if [ "`TestNumber $usersscore`" == "1" ]
+		if [ "`TestNumber ${usersscore}`" == "1" ]
 		then 
 			NonNumError ${usersscore}
 		else
 			scoreloop=1
 		fi
-		if [ "$isneg" == "1" ]
+		if [ "${isneg}" == "1" ]
 		then
 			usersscore=`echo -${usersscore}`
 		fi
@@ -217,17 +217,17 @@ function AddEvent() {
 	# Instead we need to enter two single quotes. Using the hex escapes
 	# ( \x27 == ' ) as getting single quotes to work consistently across a
 	# few different platforms seems to be an effort in insanity.
-	if [ ! -z "`echo $usersnote | grep "'"`" ]
+	if [ ! -z "`echo ${usersnote} | grep "'"`" ]
 	then
 		# Found a single quote somewhere.
-		usersnote=`echo $usersnote | sed -e 's/\x27/\x27\x27/g'`
+		usersnote=`echo ${usersnote} | sed -e 's/\x27/\x27\x27/g'`
 	fi
 		
-	$sqliteapp $rtdb "INSERT into 'RslvTrkr' (date,time,tags,score,notes) VALUES ('${storedate}',${userstimelength},'${userstags}',${usersscore},'${usersnote}')"
+	${sqliteapp} ${rtdb} "INSERT into 'RslvTrkr' (date,time,tags,score,notes) VALUES ('${storedate}',${userstimelength},'${userstags}',${usersscore},'${usersnote}')"
 	if [ "`echo $?`" -ne "0" ]
 	then
 		echo "Ack! Database entry failed. Here is what I tried to do."
-		echo "$sqliteapp $rtdb \"INSERT into 'RslvTrkr' (date,time,tags,score,notes) VALUES ('${storedate}',${userstimelength},'${userstags}',${usersscore},'${usersnote}')\""
+		echo "${sqliteapp} ${rtdb} \"INSERT into 'RslvTrkr' (date,time,tags,score,notes) VALUES ('${storedate}',${userstimelength},'${userstags}',${usersscore},'${usersnote}')\""
 		exit 8
 	fi
 }
@@ -236,7 +236,44 @@ function AddEvent() {
 ################################################################################
 function DisplayEvents(){
 	# Yeah, I know. Not very pretty output. 
-	$sqliteapp $rtdb "select * from  'RslvTrkr'"
+	${sqliteapp} ${rtdb} "select * from  'RslvTrkr'"
+}
+################################################################################
+# Calculate average score
+################################################################################
+function CalcAvgScore(){
+	calavg=0
+	caltot=0
+	for i in `${sqliteapp} ${rtdb} "select score from 'RslvTrkr'"`
+	do
+		caltot=$((${caltot}+1))
+		calavg=$((${calavg}+${i}))
+	done
+	echo ""
+	echo "Total score over ${caltot} events is ${calavg}."
+	calavg=$((${calavg}/${caltot}))
+	echo "Average score is ${calavg}."
+}
+################################################################################
+# Calculate average time
+################################################################################
+function CalcAvgTime(){
+	timeavg=0
+	timetot=0
+	for i in `${sqliteapp} ${rtdb} "select time from 'RslvTrkr'"`
+	do
+		timetot=$((${timetot}+1))
+		timeavg=$((${timeavg}+${i}))
+	done
+	timeavg=$((${timeavg}/${timetot}))
+	echo "Average amount of time spent per event is ${timeavg} minutes."
+}
+################################################################################
+# Display Stats
+################################################################################
+function DisplayStats(){
+	CalcAvgScore
+	CalcAvgTime
 }
 ################################################################################
 # Main menu
@@ -250,24 +287,25 @@ function menu() {
 	echo "Please select an option to begin."
 	echo ""
 	loop=0
-	while [ $loop -ne 1 ]
+	while [ ${loop} -ne 1 ]
 	do
 		echo "Enter 1 to create a new event."
 		echo "Enter 2 to view all events."
-		#echo "Enter 3 to view stats."
+		echo "Enter 3 to view stats."
 		#echo "Enter 4 to view stats w/ calendar."
 		#echo "Enter 5 to view calendar stats only."
 		echo "Enter q to quit (exit 0)."
-		if [ ! -z $1 ]
+		if [ ! -z ${1} ]
 		then
-			userchoice=$1
+			userchoice=${1}
 		else
 			read userchoice
 		fi
-		case "$userchoice" in
+		case "${userchoice}" in
 			q|Q) echo "Quiting." ; exit 0 ;;
 			1) AddEvent; loop=1 ;;
 			2) DisplayEvents; loop=1 ;;
+			3) DisplayStats; loop=1 ;;
 			*) echo "Not a valid option." ;;
 		esac
 	done

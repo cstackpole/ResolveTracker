@@ -50,14 +50,10 @@
 #
 # TODO: Clean up DisplayEvents output to make it look pretty.
 # TODO: Enable option 3
-#       Total score over $X events is $Y
-#       Average score is $Z
 #       Most common time of day (morning afternoon) 
 #       Most common day of week
-#	Average time spent
 #       Most common tags
 #	All tag activity
-#       
 # TODO: Enable option 4
 # TODO: Enable option 5
 # TODO: Add GUI frontend
