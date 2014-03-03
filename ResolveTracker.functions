@@ -1,0 +1,274 @@
+#!/bin/bash -
+#
+# Copyright (C) 2014  cstackpole
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+#
+# See COPYRIGHT file for full notice.
+#
+#
+#
+# Please see ResolveTracker.sh for the main program.
+# ResolveTracer.functions is just the support functions.
+#
+# The fields tracked are: Date, StartTime, TimeInvested, Tags, Score, Notes
+# Date: The day of the event. (20140128)
+# StartTime: When the event began in HH:MM format (eg: 15:30)
+# TimeInvested: The amount of time invested in the event in minutes. (eg: 70)
+# Tags: Originally "Title", this field allows for comma seperated list of tags
+#       for sorting, statistics, and whatnot.
+# Score: Was the effort and time invested worth it? Feel free to leave this 0
+#        I am experimenting with its usefulness.
+# Notes: Any details you might want to associate with this event.
+#
+# Exit Codes:
+#  1: Function usage called
+#  2: Wrong binary
+#  3: Need version 3 or better of sqlite
+#  4: User bailed on creating a new database
+#  5: Found a database file that does not appear to be a SQLite 3.x database
+#  6: Found a file the user doesn't want to overwrite.
+#  7: Found a database without the RslvTrkr table
+#  8: Database entry failed
+#
+# Quick notes on stuff I want to remember:
+# Get the last row
+# $sqliteapp $rtdb "select max(id) from 'RslvTrkr'"
+#
+################################################################################
+# Usage Function
+################################################################################
+function usage (){
+        echo "Please pass the proper parameters."
+	echo "-c option creates a new db."
+        echo "-d is the full path to the sqlite database."
+	echo "   Default: ~/.ResolveTracker/ResolveTracker.db"
+        echo "-h will print this menu"
+	echo "-j # jumps to the selection number."
+        echo "-s is the full path to sqlite."
+        exit 1
+}
+################################################################################
+# Test if a variable is a positive number
+################################################################################
+function TestNumber() {
+	# swiped code from jilles at
+	# http://stackoverflow.com/questions/806906/how-do-i-test-if-a-variable-is-a-number-in-bash
+        case $1 in
+                ''|*[!0-9]*) echo 1 ;;
+                *) echo 0 ;;
+        esac    
+}
+################################################################################
+# Non Number Error. Tired of updating so many places.
+################################################################################
+function NonNumError(){
+	echo "${1} is not a positive number."
+}
+################################################################################
+# Code for checking a year was getting a bit long. Moving it into it's own function.
+################################################################################
+function CheckUserYear(){
+	yearloop=0
+	while [ "${yearloop}" == "0" ]
+	do
+		echo "Please enter the date you wish to use."
+		echo "YYYY-MM-DD"
+		read storedate
+		chkyear=`echo ${storedate} | cut -d '-' -f1`
+		chkmonth=`echo ${storedate} | cut -d '-' -f2`
+		chkday=`echo ${storedate} | cut -d '-' -f3`
+		if [ "`TestNumber ${chkyear}`" == "1" ]
+		then 
+			NonNumError ${chkyear}
+		elif [ "${chkyear}" -lt "1970" ]
+		then
+			echo "${chkyear} is a invalid year. Should be greater then 1970."
+		elif [ "`TestNumber ${chkmonth}`" == "1" ]
+		then 
+			NonNumError ${chkmonth}
+		elif [ "${chkmonth}" -eq "0" -o "${chkmonth}" -gt "12" ]
+		then
+			echo "${chkmonth} is a invalid month. Should be between 1 and 12."
+		elif [ "`TestNumber ${chkday}`" == "1" ]
+		then 
+			NonNumError ${chkday}
+		elif [ "${chkday}" -eq "0" -o "${chkday}" -gt "31" ]
+		then
+			echo "${chkday} is a invalid day. Should be between 1 and 31."
+		else
+			yearloop=1
+		fi
+	done
+}
+################################################################################
+# Add Event Menu
+################################################################################
+function AddEvent() {
+	echo "Adding an event!"
+	# Get the date of the event
+	dloop=0
+	storedate=''
+	while [ $dloop -ne 1 ]
+	do
+		echo "Do you want to use todays date? [y/n]"
+		read usersdate
+		if [ "$usersdate" == "y" -o "$usersdate" == "Y" ]
+		then
+			storedate=`date '+%F'`
+			dloop=1
+		elif [ "$usersdate" == "n" -o "$usersdate" == "N" ]
+		then
+			CheckUserYear
+			dloop=1
+		else
+			echo "I don't understand that input. Please try again."
+		fi
+	done
+
+	# Get the time of the event
+	timeloop=0
+	while [ "${timeloop}" == "0" ]
+	do
+		echo "What time did you start the event?"
+		echo "HH:MM in ISO 8601 24hr format."
+		read userstime
+		chkhour=`echo ${userstime} | cut -d ':' -f1`
+		chkminute=`echo ${userstime} | cut -d ':' -f2`
+		if [ "`TestNumber ${chkhour}`" == "1" ]
+		then 
+			NonNumError ${chkhour}
+		elif [ "${chkhour}" -gt "24" ]
+		then
+			echo "${chkhour} is a invalid hour. Should be between 00 and 24."
+		elif [ "`TestNumber ${chkminute}`" == "1" ]
+		then 
+			NonNumError ${chkminute}
+		elif [ "${chkminute}" -gt "60" ]
+		then
+			echo "${chkminute} is a invalid minute. Should be between 00 and 60."
+		else
+			timeloop=1
+			# Format the hour/minute in case the user inputs 1:3 instead of 01:03
+			userstime=`printf %02d:%02d ${chkhour} ${chkminute}`
+		fi
+	done
+	storedate=`echo $storedate $userstime`
+
+	# Get length of time
+	timelenloop=0
+	while [ "${timelenloop}" == "0" ]
+	do
+		echo "How long did you spend at the event."
+		read userstimelength
+		if [ "`TestNumber $userstimelength`" == "1" ]
+		then 
+			NonNumError ${userstimelength}
+		else
+			timelenloop=1
+		fi
+	done
+
+	# Get the list of tags
+	echo "Please enter a comma seperate list of tags."
+	read userstags
+
+	# Get the score
+	scoreloop=0
+	while [ "${scoreloop}" == "0" ]
+	do
+		echo "Please enter a score."
+		read usersscore
+		isneg=0
+		if [ "`echo ${usersscore:0:1}`" == "-" ]
+		then
+			isneg=1
+			usersscore=${usersscore:1}			
+		fi
+		if [ "`TestNumber $usersscore`" == "1" ]
+		then 
+			NonNumError ${usersscore}
+		else
+			scoreloop=1
+		fi
+		if [ "$isneg" == "1" ]
+		then
+			usersscore=`echo -${usersscore}`
+		fi
+	done
+
+	# Get the note
+	echo "Please enter a note."
+	read usersnote
+	
+	# Verify we don't have any single quotes as that messes with SQLite.
+	# Instead we need to enter two single quotes. Using the hex escapes
+	# ( \x27 == ' ) as getting single quotes to work consistently across a
+	# few different platforms seems to be an effort in insanity.
+	if [ ! -z "`echo $usersnote | grep "'"`" ]
+	then
+		# Found a single quote somewhere.
+		usersnote=`echo $usersnote | sed -e 's/\x27/\x27\x27/g'`
+	fi
+		
+	$sqliteapp $rtdb "INSERT into 'RslvTrkr' (date,time,tags,score,notes) VALUES ('${storedate}',${userstimelength},'${userstags}',${usersscore},'${usersnote}')"
+	if [ "`echo $?`" -ne "0" ]
+	then
+		echo "Ack! Database entry failed. Here is what I tried to do."
+		echo "$sqliteapp $rtdb \"INSERT into 'RslvTrkr' (date,time,tags,score,notes) VALUES ('${storedate}',${userstimelength},'${userstags}',${usersscore},'${usersnote}')\""
+		exit 8
+	fi
+}
+################################################################################
+# Display Events
+################################################################################
+function DisplayEvents(){
+	# Yeah, I know. Not very pretty output. 
+	$sqliteapp $rtdb "select * from  'RslvTrkr'"
+}
+################################################################################
+# Main menu
+################################################################################
+function menu() {
+	echo ""
+	echo "Greetings! Welcome to Resolve Tracker."
+	echo "This is a simple program to help track your progress on any event"
+	echo "you wish to log and record your activty on."
+	echo ""
+	echo "Please select an option to begin."
+	echo ""
+	loop=0
+	while [ $loop -ne 1 ]
+	do
+		echo "Enter 1 to create a new event."
+		echo "Enter 2 to view all events."
+		#echo "Enter 3 to view stats."
+		#echo "Enter 4 to view stats w/ calendar."
+		#echo "Enter 5 to view calendar stats only."
+		echo "Enter q to quit (exit 0)."
+		if [ ! -z $1 ]
+		then
+			userchoice=$1
+		else
+			read userchoice
+		fi
+		case "$userchoice" in
+			q|Q) echo "Quiting." ; exit 0 ;;
+			1) AddEvent; loop=1 ;;
+			2) DisplayEvents; loop=1 ;;
+			*) echo "Not a valid option." ;;
+		esac
+	done
+}
