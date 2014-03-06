@@ -151,6 +151,10 @@ fi
 if [ "$createdb" == "True" ]
 then
 	echo "Creating new db $rtdb"
+
+	# Create the directory structure.
+	mkdir -p ${HOME}/.ResolveTracker
+
 	if [ -f $rtdb ]
 	then
 		echo "Err...Found a file by that name. Overwrite? [y|n]"
