@@ -47,6 +47,14 @@
 # Get the last row
 # $sqliteapp $rtdb "select max(id) from 'RslvTrkr'"
 #
+#
+# A note about the functions.
+# I know a lot of them are very similar and I could probably save a few cpu
+# cycles cramming them together, but that was part of the reason for this
+# rewrite. The first revision of this program tried to do everything in a single
+# loop and it just got nasty to maintain and debug. Simple functions for me...
+# at least for now... :-)
+#
 ################################################################################
 # Usage Function
 ################################################################################
@@ -150,7 +158,7 @@ function AddEvent() {
 		if [ "`TestNumber ${chkhour}`" == "1" ]
 		then 
 			NonNumError ${chkhour}
-		elif [ "${chkhour}" -gt "24" ]
+		elif [ "${chkhour}" -gt "23" ]
 		then
 			echo "${chkhour} is a invalid hour. Should be between 00 and 24."
 		elif [ "`TestNumber ${chkminute}`" == "1" ]
@@ -235,7 +243,7 @@ function AddEvent() {
 # Display Events
 ################################################################################
 function DisplayEvents(){
-	# Yeah, I know. Not very pretty output. 
+	# Yeah, I know. Not very pretty output. Need to bump this on the todo.
 	${sqliteapp} ${rtdb} "select * from  'RslvTrkr'"
 }
 ################################################################################
@@ -246,6 +254,7 @@ function CalcAvgScore(){
 	caltot=0
 	for i in `${sqliteapp} ${rtdb} "select score from 'RslvTrkr'"`
 	do
+		# track total amount of records
 		caltot=$((${caltot}+1))
 		calavg=$((${calavg}+${i}))
 	done
@@ -253,6 +262,7 @@ function CalcAvgScore(){
 	echo "Total score over ${caltot} events is ${calavg}."
 	calavg=$((${calavg}/${caltot}))
 	echo "Average score is ${calavg}."
+	echo ""
 }
 ################################################################################
 # Calculate average time
@@ -262,11 +272,73 @@ function CalcAvgTime(){
 	timetot=0
 	for i in `${sqliteapp} ${rtdb} "select time from 'RslvTrkr'"`
 	do
+		# track total amount of records
 		timetot=$((${timetot}+1))
 		timeavg=$((${timeavg}+${i}))
 	done
 	timeavg=$((${timeavg}/${timetot}))
 	echo "Average amount of time spent per event is ${timeavg} minutes."
+	echo ""
+}
+################################################################################
+# Calculate Morning/Afternoon frequency
+################################################################################
+function CalcAMPMStats(){
+	amavg=0
+	pmavg=0
+	# select the date, cut only the time field, cut only the hour.
+	for i in `${sqliteapp} ${rtdb} "select date from 'RslvTrkr'" \
+	| cut -d' ' -f 2 | cut -d ':' -f 1`
+	do
+		case $i in
+			# Grab all numbers between 1-9, 01-09, 10, 11
+			[0-9] | 0[0-9] | 1[01]) amavg=$((${amavg}+1)) ;;
+			# Grab all numbers between 11-19, 20-23
+			1[2-9] | 2[0-3]) pmavg=$((${pmavg}+1)) ;;
+			# Catch all for something we don't recognize
+			*) echo "Can not calculate ${i} average. Ignoring." 1>&2 ;;
+		esac
+	done
+	echo "Morning frequency   : ${amavg}"
+	echo "Afternoon frequency : ${pmavg}"
+	echo ""
+}
+################################################################################
+# Calculate common day of the week.
+################################################################################
+function CalcDOWStats(){
+	sunavg=0
+	monavg=0
+	tueavg=0
+	wedavg=0
+	thuavg=0
+	friavg=0
+	satavg=0
+	# select the date, cut only the date field.
+	for i in `${sqliteapp} ${rtdb} "select date from 'RslvTrkr'" \
+	| cut -d' ' -f 1`
+	do
+		dowtmp=`date -d $i +%a`
+		case $dowtmp in
+			Sun) sunavg=$((${sunavg}+1));;
+			Mon) monavg=$((${monavg}+1));;
+			Tue) tueavg=$((${tueavg}+1));;
+			Wed) wedavg=$((${wedavg}+1));;
+			Thu) thuavg=$((${thuavg}+1));;
+			Fri) friavg=$((${friavg}+1));;
+			Sat) satavg=$((${satavg}+1));;
+			*) echo "Can not calculate date ${i}. Ignoring." 1>&2 ;;
+		esac
+	done
+	echo "Day of Week Frequency:"
+	echo "  Sun: ${sunavg}"
+	echo "  Mon: ${monavg}"
+	echo "  Tue: ${tueavg}"
+	echo "  Wed: ${wedavg}"
+	echo "  Thu: ${thuavg}"
+	echo "  Fri: ${friavg}"
+	echo "  Sat: ${satavg}"
+	echo ""
 }
 ################################################################################
 # Display Stats
@@ -274,6 +346,8 @@ function CalcAvgTime(){
 function DisplayStats(){
 	CalcAvgScore
 	CalcAvgTime
+	CalcAMPMStats
+	CalcDOWStats
 }
 ################################################################################
 # Main menu

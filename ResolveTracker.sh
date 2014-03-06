@@ -50,10 +50,11 @@
 #
 # TODO: Clean up DisplayEvents output to make it look pretty.
 # TODO: Enable option 3
-#       Most common time of day (morning afternoon) 
-#       Most common day of week
 #       Most common tags
 #	All tag activity
+#	Tag trending per month
+#	Tag trending per year
+#	Goals for $X hours in a tag.
 # TODO: Enable option 4
 # TODO: Enable option 5
 # TODO: Add GUI frontend
