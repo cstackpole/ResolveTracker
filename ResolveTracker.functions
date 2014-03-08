@@ -341,6 +341,81 @@ function CalcDOWStats(){
 	echo ""
 }
 ################################################################################
+# Calculate the frequency of the tags by year.
+################################################################################
+function CalcTagStats(){
+# This is the nastiest of the code that I am porting over. This is /after/
+# I have cleaned it up too! I am not going to lie. I could use some help
+# tidying this up.
+#
+	# First we need to set our IFS for dealing with spaces
+	tmpIFS=`echo ${IFS}`
+	IFS=`echo -e "\012\015"`
+	# Blank our header variable
+	yearheader=''
+	yeartotals=''
+	yearalltotals=0
+	yeartmpount=''
+	# Create a array of years. Pull from db, cut only the year, sort/uniq
+	yeararray=(`${sqliteapp} ${rtdb} "select date from 'RslvTrkr'"\
+		  | cut -d"-" -f1 | sort -u`)
+	# Set variables for colors
+	greencolor="\x1b[32;01m"
+	redcolor="\x1b[31;01m"
+	resetcolor="\x1b[39;49;00m"
+	# Build our header of years first.
+	for j in ${yeararray[@]}
+	do
+		# Create a year header banner.
+		yearheader=`echo -e "${yearheader}${j}\t| "`
+		# Previously, I had a crazy complex formula with a half-
+		# dozen variables to calculate total events every year.
+		# This is much simpler.
+		yeartmpcount=`${sqliteapp} ${rtdb} "select date from 'RslvTrkr' where date like '${j}%'" | wc -l`
+		yeartotals=`echo -e "${yeartotals}${yeartmpcount}\t| "`
+		yearalltotals=$((${yearalltotals}+${yeartmpcount}))
+	done
+	yearheader=`echo -e "${yearheader}Total"`
+	echo ${yearheader}
+
+	# Loop through all of the tags first so we can build a complete list
+	for i in `${sqliteapp} ${rtdb} "select tags from 'RslvTrkr'"\
+                  | sed -e 's/, /\n/g' -e 's/,/\n/g' | sort -u`
+	do
+		# Reset temp variables.
+		tmpcount=''
+		prevcount=0
+		totalcount=0
+		# Now cycle through the years so we know how many tags per year
+		for j in ${yeararray[@]}
+		do
+			# Find all elements in the db that match both the year
+			# and the tag.
+			dbcmdarray=(`${sqliteapp} ${rtdb}\
+			"select id from 'RslvTrkr' where date like '${j}%' and\
+			 tags like '%${i}%'"`)
+			if [ "${#dbcmdarray[@]}" -lt "${prevcount}" ]
+			then
+				tmpcount=`echo -e "${tmpcount}${redcolor}${#dbcmdarray[@]}${resetcolor}\t| "`
+			elif [ "${#dbcmdarray[@]}" -gt "${prevcount}" ]
+			then
+				tmpcount=`echo -e "${tmpcount}${greencolor}${#dbcmdarray[@]}${resetcolor}\t| "`
+			else
+				tmpcount=`echo -e "${tmpcount}${#dbcmdarray[@]}\t| "`
+			fi
+			prevcount=${#dbcmdarray[@]}
+			totalcount=$((${totalcount}+${#dbcmdarray[@]}))
+		done
+		echo -e "${tmpcount}${prevcount}\t| ${i}"
+	done
+	echo ""
+	echo "Total number of recorded events per year."
+	echo ${yearheader}
+	echo -e "${yeartotals}${yearalltotals}"
+	# Reset our IFS
+	IFS=`echo $tmpIFS`
+}
+################################################################################
 # Display Stats
 ################################################################################
 function DisplayStats(){
@@ -348,6 +423,7 @@ function DisplayStats(){
 	CalcAvgTime
 	CalcAMPMStats
 	CalcDOWStats
+	CalcTagStats
 }
 ################################################################################
 # Main menu
