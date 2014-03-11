@@ -415,7 +415,7 @@ function CalcTagStats(){
 			prevcount=${#dbcmdarray[@]}
 			totalcount=$((${totalcount}+${#dbcmdarray[@]}))
 		done
-		echo -e "${tmpcount}${prevcount}\t| ${i}"
+		echo -e "${tmpcount}${totalcount}\t| ${i}"
 	done
 	echo ""
 	echo "Total number of recorded events per year."
