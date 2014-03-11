@@ -155,18 +155,27 @@ function AddEvent() {
 		read userstime
 		chkhour=`echo ${userstime} | cut -d ':' -f1`
 		chkminute=`echo ${userstime} | cut -d ':' -f2`
-		if [ "`TestNumber ${chkhour}`" == "1" ]
+		# First check if we have a valid format of xx:xx.
+		if [ -z "`echo ${userstime} | grep :`" ]
+		then 
+			echo "${userstime} is not a valid HH:MM format. Please try again."	
+		# Then check if we have a valid number.
+		elif [ "`TestNumber ${chkhour}`" == "1" ]
 		then 
 			NonNumError ${chkhour}
+		# Then check if the number is greater then 23 (24th hour is not valid).
 		elif [ "${chkhour}" -gt "23" ]
 		then
 			echo "${chkhour} is a invalid hour. Should be between 00 and 24."
+		# Then check if we have a valid minute.
 		elif [ "`TestNumber ${chkminute}`" == "1" ]
 		then 
 			NonNumError ${chkminute}
-		elif [ "${chkminute}" -gt "60" ]
+		# Then check if the number is greater then 59 (60th minute is not valid).
+		elif [ "${chkminute}" -gt "59" ]
 		then
 			echo "${chkminute} is a invalid minute. Should be between 00 and 60."
+		# Looks like everything is good! Break the loop and keep the result.
 		else
 			timeloop=1
 			# Format the hour/minute in case the user inputs 1:3 instead of 01:03
